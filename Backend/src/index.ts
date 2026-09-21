@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { env } from "./env.js";
+import requestsRoutes from './routes/requestsRoutes.js' 
 
 const app = express();
 const PORT = env.PORT;
@@ -19,7 +20,10 @@ app.use(
 );
 app.use(express.json());
 
-// Healthcheck — útil para confirmar que Railway lo tiene corriendo
+// importar rutas para hacer las requests
+app.use("/api/requests", requestsRoutes);
+
+// Healthcheck — útil para confirmar que Railway (Cualquier otro que se vaya a usar) lo tiene corriendo
 app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
 });
