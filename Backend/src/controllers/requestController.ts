@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { db } from "../db/connection.js";
 import { requests, request_items } from "../db/schema/indexSchema.js";
 import { products } from "../db/schema/references.js";
@@ -277,6 +277,46 @@ export async function listPendingRequests(_req: AuthenticatedRequest, res: Respo
     return res.status(200).json({ success: true, data: pending });
 }
 
+// archivar una solicitud
+export async function archiveRequest(req: AuthenticatedRequest, res: Response) {
+    const parsedParams = requestIdParamSchema.safeParse(req.params);
+
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: "ID de solicitud inválido" });
+    }
+
+    const { id } = parsedParams.data;
+    const userId = req.userId;
+
+    if (!userId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    const [request] = await db.select().from(requests).where(eq(requests.id, id));
+
+    if (!request) {
+        return res.status(404).json({ error: "Solicitud no encontrada" });
+    }
+
+    // Solo el dueño del pedido puede archivarlo — evita que un usuario borre pedidos ajenos
+    if (request.userId !== userId) {
+        return res.status(403).json({ error: "No puedes modificar este pedido" });
+    }
+
+    // No tiene sentido ocultar un pedido que aún está en proceso
+    if (request.status === "pending") {
+        return res.status(400).json({ error: "No puedes eliminar un pedido pendiente" });
+    }
+
+    const [updated] = await db
+        .update(requests)
+        .set({ archivedByUser: true })
+        .where(eq(requests.id, id))
+        .returning();
+
+    return res.status(200).json({ success: true, data: updated });
+}
+
 // Usuario: sus propias solicitudes, cualquier estado
 export async function listMyRequests(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId;
@@ -286,7 +326,7 @@ export async function listMyRequests(req: AuthenticatedRequest, res: Response) {
     }
 
     const myRequests = await db.query.requests.findMany({
-        where: eq(requests.userId, userId),
+        where: and(eq(requests.userId, userId), eq(requests.archivedByUser, false)),
         with: {
             requestItems: true,
         },
