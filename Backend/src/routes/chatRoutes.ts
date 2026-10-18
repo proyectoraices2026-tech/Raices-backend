@@ -1,10 +1,10 @@
 import { Router, Request, Response } from "express";
 import { GoogleGenAI } from "@google/genai";
-import { env } from "../env";
+import { env } from "../env.js";
 
 
 const router = Router();
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: String(env.GEMINI_API_KEY) });
 
 router.post("/", async (req: Request, res: Response) => {
   try {
