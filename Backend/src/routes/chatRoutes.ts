@@ -33,9 +33,9 @@ router.post("/", async (req: Request, res: Response) => {
       parts: [{ text: msg.text }],
     }));
 
-    // Llamada oficial a Gemini 2.5 Flash
+    // Cambio al 3.8
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
       contents: [
         ...formattedHistory,
         { role: "user", parts: [{ text: message }] },
