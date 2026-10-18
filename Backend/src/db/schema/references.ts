@@ -26,3 +26,12 @@ export const roles = pgTable("roles", {
     description: text("description"),
 });
 
+
+// Representación de la tabla plants que vive en Supabase
+export const plants = pgTable("plants", {
+  id: uuid("id").primaryKey(),
+  userId: uuid("user_id"),
+  name: text("name"),
+  scientificName: text("scientific_name"),
+  icon: text("icon"),
+});
