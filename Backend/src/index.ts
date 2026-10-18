@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { env } from "./env.js";
 import requestsRoutes from './routes/requestsRoutes.js' 
-
+import chatRoutes from './routes/chatRoutes.js';
 const app = express();
 const PORT = env.PORT;
 
@@ -27,6 +27,7 @@ app.use("/api/requests", requestsRoutes);
 app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
 });
+app.use("/api/chat", chatRoutes);
 
 // Rutas (se agregan a medida que las construyamos)
 // app.use("/api/orders", ordersRouter);

@@ -4,6 +4,7 @@ import { z } from "zod";
 const envSchema = z.object({
     DATABASE_URL: z.string().url(),
     SUPABASE_URL: z.string().url(),
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
     PORT: z.coerce.number().default(3000),
 });
 
