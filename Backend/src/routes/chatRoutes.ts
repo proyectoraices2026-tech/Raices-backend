@@ -73,7 +73,7 @@ router.post("/", async (req: Request, res: Response) => {
 
     // 4. Generar respuesta con Gemini 3.8 Flash
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       contents: message,
       config: {
         systemInstruction: systemInstruction,
