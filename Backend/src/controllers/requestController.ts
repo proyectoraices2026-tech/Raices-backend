@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, ne } from "drizzle-orm";
 import { db } from "../db/connection.js";
 import { requests, request_items } from "../db/schema/indexSchema.js";
 import { products } from "../db/schema/references.js";
@@ -315,6 +315,31 @@ export async function archiveRequest(req: AuthenticatedRequest, res: Response) {
         .returning();
 
     return res.status(200).json({ success: true, data: updated });
+}
+
+// archivar todas las solicitudes
+export async function archiveAllRequests(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId;
+
+    if (!userId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    // El filtro por userId garantiza que solo se tocan pedidos propios.
+    // Los pendientes se omiten (misma regla que archiveRequest) y los ya archivados no se vuelven a procesar.
+    const updated = await db
+        .update(requests)
+        .set({ archivedByUser: true })
+        .where(
+            and(
+                eq(requests.userId, userId),
+                eq(requests.archivedByUser, false),
+                ne(requests.status, "pending")
+            )
+        )
+        .returning({ id: requests.id });
+
+    return res.status(200).json({ success: true, archivedCount: updated.length });
 }
 
 // Usuario: sus propias solicitudes, cualquier estado
