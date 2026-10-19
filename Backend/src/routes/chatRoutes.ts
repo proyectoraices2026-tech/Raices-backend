@@ -77,7 +77,7 @@ router.post("/", async (req: Request, res: Response) => {
       contents: message,
       config: {
         systemInstruction: systemInstruction,
-        maxOutputTokens: 300, 
+         
         temperature: 0.3,
       },
     });
