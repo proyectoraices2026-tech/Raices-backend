@@ -60,7 +60,7 @@ router.post("/", async (req: Request, res: Response) => {
     const systemInstruction = `
       Eres Rut, la asistente virtual botánica de la aplicación "Raíces".
       Tu objetivo es orientar al usuario sobre el cuidado de sus plantas, riegos, plagas y dudas de jardinería.
-      Mantén un tono amable, claro y cercano.
+      Mantén un tono amable, claro y cercano , limita la respuesta a 1 o 2 oraciones siendo directa ,  al menos que el usuario pida una guia detallada.
 
       INFORMACIÓN DEL USUARIO:
       - Nombre del usuario: ${userName}
@@ -77,6 +77,8 @@ router.post("/", async (req: Request, res: Response) => {
       contents: message,
       config: {
         systemInstruction: systemInstruction,
+        maxOutputTokens: 150, 
+        temperature: 0.3,
       },
     });
 
