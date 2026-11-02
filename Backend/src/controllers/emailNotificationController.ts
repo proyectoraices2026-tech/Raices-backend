@@ -1,13 +1,3 @@
-import nodemailer from "nodemailer";
-
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-    },
-});
-
 export interface OrderEmailItem {
     name: string;
     quantity: number;
@@ -60,10 +50,23 @@ export async function sendOrderCreatedEmail(data: OrderEmailData) {
       <p style="color:#666;font-size:13px;">El pago se realiza en el vivero al retirar tu pedido.</p>
     </div>`;
 
-    await transporter.sendMail({
-        from: `Raíces <${process.env.GMAIL_USER}>`,
-        to: data.to,
-        subject: `Recibimos tu solicitud de pedido #${data.requestId.slice(0, 8)}`,
-        html,
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+            "api-key": process.env.BREVO_API_KEY ?? "",
+            "Content-Type": "application/json",
+            accept: "application/json",
+        },
+        body: JSON.stringify({
+            sender: { name: "Raíces", email: process.env.EMAIL_FROM },
+            to: [{ email: data.to }],
+            subject: `Recibimos tu solicitud de pedido #${data.requestId.slice(0, 8)}`,
+            htmlContent: html,
+        }),
     });
+
+    if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Brevo respondió ${response.status}: ${detail}`);
+    }
 }
