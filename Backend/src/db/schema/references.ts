@@ -1,5 +1,5 @@
 //imports
-import { pgTable, uuid, text, numeric, integer, boolean} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, numeric, integer, boolean , date , timestamp} from "drizzle-orm/pg-core";
 
 // Representación de la tabla profiles que vive en Supabase
 export const profiles = pgTable("profiles", {
@@ -34,4 +34,19 @@ export const plants = pgTable("plants", {
   name: text("name"),
   scientificName: text("scientific_name"),
   icon: text("icon"),
+});
+
+
+export const plantTasks = pgTable("plant_tasks", {
+  id: uuid("id").primaryKey(),
+  plantId: uuid("plant_id"),
+  userId: uuid("user_id"),
+  taskType: text("task_type"),
+  isAutomatic: boolean("is_automatic"),
+  label: text("label"),
+  dueDate: date("due_date"),
+  completed: boolean("completed"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at"),
+  nextGenerated: boolean("next_generated"),
 });
