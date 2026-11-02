@@ -7,6 +7,7 @@ import type { CreateRequestInput, RejectRequestInput } from "../validators/reque
 import { requestIdParamSchema } from "../validators/requestSchema.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { sendOrderCreatedEmail } from "./emailNotificationController.js";
+import { sendRequestStatusEmail } from "./requestStatusNotification.js";
 
 
 
@@ -200,6 +201,8 @@ export async function acceptRequest(req: AuthenticatedRequest, res: Response) {
             return updated;
         });
 
+        sendRequestStatusEmail(id);
+
         return res.status(200).json({
             success: true,
             message: "Pedido aceptado exitosamente.",
@@ -270,6 +273,8 @@ export async function rejectRequest(req: AuthenticatedRequest, res: Response) {
 
             return updated;
         });
+
+        sendRequestStatusEmail(id);
 
         return res.status(200).json({
             success: true,
