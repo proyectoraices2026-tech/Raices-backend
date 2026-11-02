@@ -8,6 +8,7 @@ const JWKS = createRemoteJWKSet(
 
 export interface AuthenticatedRequest extends Request {
     userId?: string;
+    userEmail?: string;
 }
 
 export async function requireAuth(
@@ -29,6 +30,7 @@ export async function requireAuth(
         });
 
         req.userId = payload.sub;
+        req.userEmail = typeof payload.email === "string" ? payload.email : undefined;
         next();
     } catch (err) {
         return res.status(401).json({ error: "Token inválido o expirado" });

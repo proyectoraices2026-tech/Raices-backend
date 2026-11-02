@@ -6,11 +6,13 @@ import { products } from "../db/schema/references.js";
 import type { CreateRequestInput, RejectRequestInput } from "../validators/requestSchema.js";
 import { requestIdParamSchema } from "../validators/requestSchema.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
+import { sendOrderCreatedEmail } from "./emailNotificationController.js";
 
 
 
 export async function createRequest(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId;
+    const userEmail = req.userEmail; // NUEVO
     const { items }: CreateRequestInput = req.body;
 
     if (!userId) {
@@ -18,13 +20,14 @@ export async function createRequest(req: AuthenticatedRequest, res: Response) {
     }
 
     try {
-        const result = await db.transaction(async (tx) => {
+        const { newRequest, emailItems } = await db.transaction(async (tx) => { // NUEVO: ahora devuelve también los ítems para el correo
             let totalAmount = 0;
             const itemsToInsert: {
                 productId: string;
                 quantity: number;
                 price: string;
             }[] = [];
+            const emailItems: { name: string; quantity: number; price: number }[] = []; // NUEVO
 
             // 1. Validar stock y reservar, uno por uno
             for (const item of items) {
@@ -62,6 +65,13 @@ export async function createRequest(req: AuthenticatedRequest, res: Response) {
                     quantity: item.quantity,
                     price: price.toFixed(2),
                 });
+
+                // NUEVO: guardamos el nombre para el correo (request_items no lo almacena)
+                emailItems.push({
+                    name: product.name ?? "Producto sin nombre",
+                    quantity: item.quantity,
+                    price,
+                });
             }
 
             // 2. Crear la solicitud
@@ -83,13 +93,25 @@ export async function createRequest(req: AuthenticatedRequest, res: Response) {
                 }))
             );
 
-            return newRequest;
+            return { newRequest, emailItems }; // NUEVO
         });
+
+        // NUEVO: el correo se envía DESPUÉS de que la transacción se confirmó.
+        // Sin await: no retrasa la respuesta, y si falla no afecta el pedido.
+        if (userEmail) {
+            sendOrderCreatedEmail({
+                to: userEmail,
+                requestId: newRequest.id,
+                createdAt: newRequest.createdAt,
+                totalAmount: Number(newRequest.totalAmount),
+                items: emailItems,
+            }).catch((err) => console.error("Error enviando correo de pedido:", err));
+        }
 
         return res.status(201).json({
             success: true,
             message: "Pedido solicitado con éxito. Pendiente de aprobación.",
-            data: result,
+            data: newRequest, // antes: result
         });
     } catch (err) {
         console.error("Error:", err);
