@@ -30,8 +30,10 @@ export async function createRequest(req: AuthenticatedRequest, res: Response) {
             }[] = [];
             const emailItems: { name: string; quantity: number; price: number }[] = []; // NUEVO
 
-            // 1. Validar stock y reservar, uno por uno
-            for (const item of items) {
+            // Ordenar por productId evita deadlocks entre pedidos concurrentes
+            const sortedItems = [...items].sort((a, b) => a.productId.localeCompare(b.productId));
+
+            for (const item of sortedItems) {
                 const [product] = await tx
                     .select()
                     .from(products)
@@ -132,7 +134,7 @@ export async function acceptRequest(req: AuthenticatedRequest, res: Response) {
     }
 
     const { id } = parsedParams.data;
-    const {adminMessage} = req.body;
+    const { adminMessage } = req.body;
 
     try {
         const result = await db.transaction(async (tx) => {
@@ -159,8 +161,8 @@ export async function acceptRequest(req: AuthenticatedRequest, res: Response) {
                 .from(request_items)
                 .where(eq(request_items.requestId, id));
 
-            // 3. Por cada producto: confirmar stock real y descontarlo definitivamente
-            for (const item of items) {
+            // 3. Por cada producto: confirmar stock real y descontarlo definitivamente. Se define un orden para evitar deadblocks
+            for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
                 const [product] = await tx
                     .select()
                     .from(products)
@@ -251,8 +253,8 @@ export async function rejectRequest(req: AuthenticatedRequest, res: Response) {
                 .from(request_items)
                 .where(eq(request_items.requestId, id));
 
-            // Libera la reserva de cada producto — NO toca stock real
-            for (const item of items) {
+            // Libera la reserva de cada producto — NO toca stock real. Se define un orden para evitar deadblocks 
+            for (const item of [...items].sort((a, b) => a.productId.localeCompare(b.productId))) {
                 await tx
                     .update(products)
                     .set({
@@ -293,15 +295,23 @@ export async function rejectRequest(req: AuthenticatedRequest, res: Response) {
 
 // Admin: todas las solicitudes pendientes
 export async function listPendingRequests(_req: AuthenticatedRequest, res: Response) {
-    const pending = await db.query.requests.findMany({
-        where: eq(requests.status, "pending"),
-        with: {
-            requestItems: true, // ajusta al nombre real que dejaste en requestsRelations
-        },
-        orderBy: (requests, { asc }) => [asc(requests.createdAt)],
-    });
 
-    return res.status(200).json({ success: true, data: pending });
+    try {
+        const pending = await db.query.requests.findMany({
+            where: eq(requests.status, "pending"),
+            with: {
+                requestItems: true, // ajusta al nombre real que dejaste en requestsRelations
+            },
+            orderBy: (requests, { asc }) => [asc(requests.createdAt)],
+        });
+
+        return res.status(200).json({ success: true, data: pending });
+    }
+    catch (err) {
+        console.error("Error al listar los pedidos pendientes:", err);
+        return res.status(500).json({ success: false, error: "Error al listar los pedidos pendientes" });
+    }
+
 }
 
 // archivar una solicitud
@@ -319,29 +329,38 @@ export async function archiveRequest(req: AuthenticatedRequest, res: Response) {
         return res.status(401).json({ error: "No autenticado" });
     }
 
-    const [request] = await db.select().from(requests).where(eq(requests.id, id));
+    try {
+        const [request] = await db.select().from(requests).where(eq(requests.id, id));
 
-    if (!request) {
-        return res.status(404).json({ error: "Solicitud no encontrada" });
+        if (!request) {
+            return res.status(404).json({ error: "Solicitud no encontrada" });
+        }
+
+        // Solo el dueño del pedido puede archivarlo — evita que un usuario borre pedidos ajenos
+        if (request.userId !== userId) {
+            return res.status(403).json({ error: "No puedes modificar este pedido" });
+        }
+
+        // No tiene sentido ocultar un pedido que aún está en proceso
+        if (request.status === "pending") {
+            return res.status(400).json({ error: "No puedes eliminar un pedido pendiente" });
+        }
+
+        const [updated] = await db
+            .update(requests)
+            .set({ archivedByUser: true })
+            .where(eq(requests.id, id))
+            .returning();
+
+        return res.status(200).json({ success: true, data: updated });
     }
 
-    // Solo el dueño del pedido puede archivarlo — evita que un usuario borre pedidos ajenos
-    if (request.userId !== userId) {
-        return res.status(403).json({ error: "No puedes modificar este pedido" });
+    catch (err) {
+        console.error("Error al archivar un pedido:", err);
+        return res.status(500).json({ success: false, error: "Error al archivar un pedido" });
     }
 
-    // No tiene sentido ocultar un pedido que aún está en proceso
-    if (request.status === "pending") {
-        return res.status(400).json({ error: "No puedes eliminar un pedido pendiente" });
-    }
 
-    const [updated] = await db
-        .update(requests)
-        .set({ archivedByUser: true })
-        .where(eq(requests.id, id))
-        .returning();
-
-    return res.status(200).json({ success: true, data: updated });
 }
 
 // archivar todas las solicitudes
@@ -352,21 +371,28 @@ export async function archiveAllRequests(req: AuthenticatedRequest, res: Respons
         return res.status(401).json({ error: "No autenticado" });
     }
 
-    // El filtro por userId garantiza que solo se tocan pedidos propios.
-    // Los pendientes se omiten (misma regla que archiveRequest) y los ya archivados no se vuelven a procesar.
-    const updated = await db
-        .update(requests)
-        .set({ archivedByUser: true })
-        .where(
-            and(
-                eq(requests.userId, userId),
-                eq(requests.archivedByUser, false),
-                ne(requests.status, "pending")
+    try {
+        // El filtro por userId garantiza que solo se tocan pedidos propios.
+        // Los pendientes se omiten (misma regla que archiveRequest) y los ya archivados no se vuelven a procesar.
+        const updated = await db
+            .update(requests)
+            .set({ archivedByUser: true })
+            .where(
+                and(
+                    eq(requests.userId, userId),
+                    eq(requests.archivedByUser, false),
+                    ne(requests.status, "pending")
+                )
             )
-        )
-        .returning({ id: requests.id });
+            .returning({ id: requests.id });
 
-    return res.status(200).json({ success: true, archivedCount: updated.length });
+        return res.status(200).json({ success: true, archivedCount: updated.length });
+    }
+    catch (err) {
+        console.error("Error al archivar todos los pedidos:", err);
+        return res.status(500).json({ success: false, error: "Error al archivar todos los pedidos" });
+    }
+
 }
 
 // Usuario: sus propias solicitudes, cualquier estado
@@ -377,13 +403,18 @@ export async function listMyRequests(req: AuthenticatedRequest, res: Response) {
         return res.status(401).json({ error: "No autenticado" });
     }
 
-    const myRequests = await db.query.requests.findMany({
-        where: and(eq(requests.userId, userId), eq(requests.archivedByUser, false)),
-        with: {
-            requestItems: true,
-        },
-        orderBy: (requests, { desc }) => [desc(requests.createdAt)],
-    });
+    try {
+        const myRequests = await db.query.requests.findMany({
+            where: and(eq(requests.userId, userId), eq(requests.archivedByUser, false)),
+            with: {
+                requestItems: true,
+            },
+            orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+        });
 
-    return res.status(200).json({ success: true, data: myRequests });
+        return res.status(200).json({ success: true, data: myRequests });
+    } catch (err) {
+        console.error("Error listando pedidos:", err);
+        return res.status(500).json({ success: false, error: "Error al obtener los pedidos" });
+    }
 }

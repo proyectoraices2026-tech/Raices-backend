@@ -27,6 +27,7 @@ export async function requireAuth(
     try {
         const { payload } = await jwtVerify(token, JWKS, {
             issuer: `${env.SUPABASE_URL}/auth/v1`,
+            audience: "authenticated",
         });
 
         req.userId = payload.sub;

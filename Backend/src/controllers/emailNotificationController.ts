@@ -107,6 +107,7 @@ export async function sendOrderEmail(type: OrderEmailType, data: OrderEmailData)
 
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
+        signal: AbortSignal.timeout(10000), // NUEVO: aborta si Brevo no responde en 10 s
         headers: {
             "api-key": process.env.BREVO_API_KEY ?? "",
             "Content-Type": "application/json",

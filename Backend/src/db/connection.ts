@@ -7,7 +7,7 @@ const createPool = ()=>{
     return new Pool({
         connectionString: env.DATABASE_URL,
         connectionTimeoutMillis: 10000,
-        max: 20,
+        max: 15,
         ssl: {
             rejectUnauthorized: false
         }

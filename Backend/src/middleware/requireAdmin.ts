@@ -15,15 +15,20 @@ export async function requireAdmin(
         return res.status(401).json({ error: "No autenticado" });
     }
 
-    const [result] = await db
-        .select({ roleName: roles.name })
-        .from(profiles)
-        .innerJoin(roles, eq(profiles.roleId, roles.id))
-        .where(eq(profiles.id, userId));
+    try {
+        const [result] = await db
+            .select({ roleName: roles.name })
+            .from(profiles)
+            .innerJoin(roles, eq(profiles.roleId, roles.id))
+            .where(eq(profiles.id, userId));
 
-    if (!result || result.roleName !== "admin") {
-        return res.status(403).json({ error: "Acceso solo para administradores" });
+        if (!result || result.roleName !== "admin") {
+            return res.status(403).json({ error: "Acceso solo para administradores" });
+        }
+
+        next();
+    } catch (err) {
+        console.error("Error verificando rol de administrador:", err);
+        return res.status(500).json({ error: "Error al verificar permisos" });
     }
-
-    next();
 }
