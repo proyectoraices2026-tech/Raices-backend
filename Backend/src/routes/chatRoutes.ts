@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { env } from "../env.js";
 import { db } from "../db/connection.js";
 import { profiles, plants, plantTasks } from "../db/schema/references.js"; 
-import { eq, and, ilike } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 const router = Router();
 const ai = new GoogleGenAI({ apiKey: String(env.GEMINI_API_KEY) });
@@ -57,8 +57,8 @@ router.post("/", async (req: Request, res: Response) => {
       }
     }
 
-    // 3. Declaración de la herramienta/función para Gemini
-    const markTaskTool = {
+    // 3. Declaración de herramientas para Gemini
+   const markTaskTool = {
       functionDeclarations: [
         {
           name: "markTaskCompleted",
@@ -81,6 +81,24 @@ router.post("/", async (req: Request, res: Response) => {
       ],
     };
 
+    const registerPlantTool = {
+      functionDeclarations: [
+        {
+          name: "registerPlant",
+          description: "Registra una nueva planta en la base de datos para el usuario actual.",
+          parameters: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING, description: "Nombre o apodo principal de la planta." },
+              scientificName: { type: Type.STRING, description: "Nombre científico de la planta (opcional)." },
+              icon: { type: Type.STRING, description: "Identificador numérico o clave del icono de la planta." },
+              wateringInterval: { type: Type.NUMBER, description: "Cada cuántos días se debe regar (ej: 3)." }
+            },
+            required: ["name"],
+          },
+        },
+      ],
+    };
     const systemInstruction = `
       Eres Rut, la asistente virtual botánica de la aplicación "Raíces".
       Tu objetivo es orientar al usuario sobre el cuidado de sus plantas y gestionar sus tareas de riego/cuidado.
@@ -92,7 +110,8 @@ router.post("/", async (req: Request, res: Response) => {
       PLANTAS REGISTRADAS EN SU CUENTA:
       ${plantsText}
 
-      Si el usuario indica que ya realizó una tarea de cuidado sobre alguna de sus plantas (por ejemplo: "Ya regué mi Monstera", "Marqué el riego de la orquídea"), invoca inmediatamente la función "markTaskCompleted".
+      - Si el usuario indica que ya realizó una tarea de cuidado sobre alguna de sus plantas (por ejemplo: "Ya regué mi Monstera", "Marqué el riego de la orquídea"), invoca inmediatamente la función "markTaskCompleted".
+      - Si el usuario indica que quiere agregar, crear o registrar una nueva planta, invoca inmediatamente la función "registerPlant".
     `;
 
     // 4. Primera interacción con Gemini
@@ -101,7 +120,7 @@ router.post("/", async (req: Request, res: Response) => {
       contents: message,
       config: {
         systemInstruction,
-        tools: [markTaskTool],
+        tools: [markTaskTool , registerPlantTool],
         temperature: 0.3,
       },
     });
@@ -155,6 +174,33 @@ router.post("/", async (req: Request, res: Response) => {
         } else {
           return res.json({
             reply: `Tu ${targetPlant.name} no tenía ninguna tarea pendiente por marcar en el calendario. ¡Todo al día! 🌿`,
+          });
+        }
+      }
+
+      if (call.name === "registerPlant") {
+        const { name, scientificName, icon, wateringInterval } = call.args as {
+          name: string;
+          scientificName?: string;
+          icon?: string;
+          wateringInterval?: number;
+        };
+
+        const newPlant = await db.insert(plants).values({
+          id: crypto.randomUUID(),
+          userId: userId,
+          name: name,
+          scientificName: scientificName || "EMPTY",
+          icon: icon ? String(icon) : "0",
+        }).returning();
+
+        if (newPlant.length > 0) {
+          return res.json({
+            reply: `¡Listo, ${userName}! He registrado tu nueva planta **${name}** en tu colección de Raíces. 🌱✨`,
+            actionExecuted: {
+              type: "PLANT_REGISTERED",
+              plantId: newPlant[0].id,
+            },
           });
         }
       }
