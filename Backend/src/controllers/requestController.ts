@@ -395,6 +395,55 @@ export async function archiveAllRequests(req: AuthenticatedRequest, res: Respons
 
 }
 
+// desarchivar una solicitud
+export async function unArchiveRequest(req: AuthenticatedRequest, res: Response) {
+    const parsedParams = requestIdParamSchema.safeParse(req.params);
+
+    if (!parsedParams.success) {
+        return res.status(400).json({ error: "ID de solicitud inválido" });
+    }
+
+    const { id } = parsedParams.data;
+    const userId = req.userId;
+
+    if (!userId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    try {
+        const [request] = await db.select().from(requests).where(eq(requests.id, id));
+
+        if (!request) {
+            return res.status(404).json({ error: "Solicitud no encontrada" });
+        }
+
+        // Solo el dueño del pedido puede recuperarlo 
+        if (request.userId !== userId) {
+            return res.status(403).json({ error: "No puedes modificar este pedido" });
+        }
+
+        // No tiene sentido ocultar un pedido que aún está en proceso
+        if (request.status === "pending") {
+            return res.status(400).json({ error: "No puedes recuperar un pedido pendiente" });
+        }
+
+        const [updated] = await db
+            .update(requests)
+            .set({ archivedByUser: false })
+            .where(eq(requests.id, id))
+            .returning();
+
+        return res.status(200).json({ success: true, data: updated });
+    }
+
+    catch (err) {
+        console.error("Error al recuperar un pedido:", err);
+        return res.status(500).json({ success: false, error: "Error al recuperar un pedido" });
+    }
+
+
+}
+
 // Usuario: sus propias solicitudes, cualquier estado
 export async function listMyRequests(req: AuthenticatedRequest, res: Response) {
     const userId = req.userId;
@@ -406,6 +455,30 @@ export async function listMyRequests(req: AuthenticatedRequest, res: Response) {
     try {
         const myRequests = await db.query.requests.findMany({
             where: and(eq(requests.userId, userId), eq(requests.archivedByUser, false)),
+            with: {
+                requestItems: true,
+            },
+            orderBy: (requests, { desc }) => [desc(requests.createdAt)],
+        });
+
+        return res.status(200).json({ success: true, data: myRequests });
+    } catch (err) {
+        console.error("Error listando pedidos:", err);
+        return res.status(500).json({ success: false, error: "Error al obtener los pedidos" });
+    }
+}
+
+// Usuario: sus propias solicitudes, las archivadas
+export async function listArchiveRequests(req: AuthenticatedRequest, res: Response) {
+    const userId = req.userId;
+
+    if (!userId) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+
+    try {
+        const myRequests = await db.query.requests.findMany({
+            where: and(eq(requests.userId, userId), eq(requests.archivedByUser, true)),
             with: {
                 requestItems: true,
             },

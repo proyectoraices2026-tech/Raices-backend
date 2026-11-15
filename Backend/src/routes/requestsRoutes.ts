@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
-import { createRequest, listMyRequests, listPendingRequests, acceptRequest, rejectRequest, archiveRequest, archiveAllRequests } from "../controllers/requestController.js";
+import { createRequest, listMyRequests, listPendingRequests, acceptRequest, rejectRequest, archiveRequest, archiveAllRequests, listArchiveRequests, unArchiveRequest } from "../controllers/requestController.js";
 import { validateBody } from "../middleware/validations.js";
 import { rejectRequestSchema, createRequestSchema } from "../validators/requestSchema.js";
 
@@ -12,6 +12,10 @@ router.post("/request", requireAuth, validateBody(createRequestSchema), createRe
 router.get("/my-requests", requireAuth, listMyRequests);
 router.patch("/archive-all", requireAuth, archiveAllRequests);
 router.patch("/:id/archive", requireAuth, archiveRequest);
+
+// Usuario autenticado, rutas papelera de pedidos
+router.get("/archive-requests", requireAuth, listArchiveRequests);
+router.patch("/:id/unarchive", requireAuth, unArchiveRequest);
 
 
 // Solo admin
