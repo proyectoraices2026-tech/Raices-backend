@@ -56,8 +56,6 @@ export const plantTasks = pgTable("plant_tasks", {
   createdAt: timestamp("created_at"),
   nextGenerated: boolean("next_generated"),
 });
-
-
 export const categories = pgTable("categories", {
   id: uuid("id").primaryKey(),
   name: text("name"),

@@ -136,7 +136,6 @@ router.post("/", async (req: Request, res: Response) => {
       - Si el usuario indica que ya realizó una tarea de cuidado sobre alguna de sus plantas (por ejemplo: "Ya regué mi Monstera", "Marqué el riego de la orquídea"), invoca inmediatamente la función "markTaskCompleted".
       - Si el usuario indica que quiere agregar, crear o registrar una nueva planta, invoca inmediatamente la función "registerPlant".
       - Si el usuario indica que quiere agregar un producto al inventario, invoca inmediatamente la función "addProductInventory".
-    
     `;
 
     // 4. Primera interacción con Gemini
@@ -238,7 +237,7 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
       }
- if (call.name === "addProductInventory") {
+      if (call.name === "addProductInventory") {
         // 1. Verificamos si el usuario es administrador
         try {
           const [adminCheck] = await db
@@ -268,15 +267,21 @@ router.post("/", async (req: Request, res: Response) => {
           price?: number;
         };
 
-        // 3. Buscamos inteligentemente una categoría (ej. si el nombre contiene "planta" o "rosa", asignamos "Planta", o cogemos la primera por defecto)
+        // 3. Buscamos inteligentemente una categoría (priorizando si el usuario la mencionó en el mensaje)
         let targetCategoryId = null;
         try {
           const allCategories = await db.select().from(categories);
           
-          // Buscamos si alguna categoría hace match con el nombre del producto, o usamos "Planta" por defecto
-          const matchedCategory = allCategories.find(c => 
-            c.name && name.toLowerCase().includes(c.name.toLowerCase())
-          ) || allCategories.find(c => c.name === "Planta") || allCategories[0];
+          // Verificamos si el mensaje del usuario menciona alguna categoría existente
+          const mentionedCategory = allCategories.find(c => 
+            c.name && message.toLowerCase().includes(c.name.toLowerCase())
+          );
+
+          // Si la mencionó usamos esa; si no, buscamos por el nombre del producto, o "Planta", o la primera por defecto
+          const matchedCategory = mentionedCategory || 
+                                  allCategories.find(c => c.name && name.toLowerCase().includes(c.name.toLowerCase())) || 
+                                  allCategories.find(c => c.name === "Planta") || 
+                                  allCategories[0];
 
           if (matchedCategory) {
             targetCategoryId = matchedCategory.id;
@@ -288,12 +293,13 @@ router.post("/", async (req: Request, res: Response) => {
         // 4. Insertamos el producto en la base de datos cubriendo todos los campos requeridos
         await db.insert(products).values({
           id: crypto.randomUUID(),
-          name: name, 
+          name: name,
+          categoryId: targetCategoryId, 
           price: price ? String(price) : "0",
           stock: quantity,
           reservedStock: 0,
           isActive: true,
-        });
+        } as any);
 
         return res.json({
           reply: `¡Listo, ${userName}! Has agregado exitosamente **${quantity}x ${name}** al inventario como administrador. 📦✨`,
