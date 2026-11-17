@@ -93,6 +93,7 @@ router.post("/", async (req: Request, res: Response) => {
           name: { type: Type.STRING, description: "Nombre del producto." },
           quantity: { type: Type.NUMBER, description: "Cantidad inicial en stock." },
           price: { type: Type.NUMBER, description: "Precio del producto (opcional)." },
+          imageUrl: { type: Type.STRING, description: "Enlace o URL de la imagen del producto (opcional)." },
         },
         required: ["name", "quantity"],
       },
@@ -237,8 +238,8 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
       }
-      if (call.name === "addProductInventory") {
-    
+    if (call.name === "addProductInventory") {
+        // 1. Verificamos si el usuario es administrador
         try {
           const [adminCheck] = await db
             .select({ roleName: roles.name })
@@ -258,22 +259,20 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
 
-    
-        const { name, sku, description, quantity, price } = call.args as {
+        // 2. Extraemos los argumentos (incluyendo imageUrl opcional)
+        const { name, imageUrl, quantity, price } = call.args as {
           name: string;
-          sku?: string;
-          description?: string;
+          imageUrl?: string;
           quantity: number;
           price?: number;
         };
 
-      
+        // 3. Buscamos la categoría inteligentemente
         let targetCategoryId = null;
         try {
           const allCategories = await db.select().from(categories);
           
           if (allCategories && allCategories.length > 0) {
-            // Buscamos si el usuario mencionó alguna categoría
             const mentionedCategory = allCategories.find(c => 
               c.name && message.toLowerCase().includes(c.name.toLowerCase())
             );
@@ -281,7 +280,7 @@ router.post("/", async (req: Request, res: Response) => {
             const matchedCategory = mentionedCategory || 
                                     allCategories.find(c => c.name && name.toLowerCase().includes(c.name.toLowerCase())) || 
                                     allCategories.find(c => c.name?.toLowerCase() === "planta") || 
-                                    allCategories[0]; // Coge la primera que exista obligatoriamente
+                                    allCategories[0]; 
 
             if (matchedCategory) {
               targetCategoryId = matchedCategory.id;
@@ -291,24 +290,24 @@ router.post("/", async (req: Request, res: Response) => {
           console.error("Error obteniendo categoría:", e);
         }
 
-
         if (!targetCategoryId) {
           return res.json({
-            reply: `Lo siento ${userName}, no encontré categorías válidas configuradas en la base de datos para registrar el producto.`,
+            reply: `Lo siento ${userName}, no encontré categorías válidas configuradas en la base de datos.`,
           });
         }
 
-        
+        // 4. Insertamos el producto incluyendo la imagen opcional y el SKU automático
         await db.insert(products).values({
           id: crypto.randomUUID(),
           name: name,
           sku: `SKU-${Date.now().toString().slice(-6)}`,
+          imageUrl: imageUrl || null, // <--- Si no hay imagen, se guarda como null en Supabase
           categoryId: targetCategoryId, 
           price: price ? String(price) : "0",
           stock: quantity,
           reservedStock: 0,
           isActive: true,
-        } as any);
+        });
 
         return res.json({
           reply: `¡Listo, ${userName}! Has agregado exitosamente **${quantity}x ${name}** al inventario como administrador. 📦✨`,

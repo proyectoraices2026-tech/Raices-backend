@@ -15,6 +15,7 @@ export const products = pgTable("products", {
     categoryId: uuid("category_id"),
     sku: text("sku"),
     name: text("name"),
+    imageUrl: text("image_url"),
     price: numeric("price", { precision: 10, scale: 2 }),
     stock: integer("stock"),
     reservedStock: integer("reserved_stock"),
