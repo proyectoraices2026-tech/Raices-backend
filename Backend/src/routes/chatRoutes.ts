@@ -183,11 +183,14 @@ router.post("/", async (req: Request, res: Response) => {
       }
 
       if (call.name === "registerPlant") {
-        const { name, scientificName, icon, wateringInterval } = call.args as {
+        const { name, scientificName, icon, wateringInterval, pruningInterval , fertilizerInterval } = call.args as {
           name: string;
           scientificName?: string;
           icon?: string;
           wateringInterval?: number;
+          pruningInterval?: number;      
+          fertilizerInterval?: number;
+          
         };
 
         const newPlant = await db.insert(plants).values({
@@ -196,6 +199,12 @@ router.post("/", async (req: Request, res: Response) => {
           name: name,
           scientificName: scientificName || "EMPTY",
           icon: icon ? String(icon) : "0",
+          wateringEnabled: wateringInterval !== undefined,
+          wateringInterval: wateringInterval ?? 7,
+          pruningEnabled: pruningInterval !== undefined,
+          pruningInterval: pruningInterval ?? 30,
+          fertilizerEnabled: fertilizerInterval !== undefined,
+          fertilizerInterval: fertilizerInterval ?? 15,
         }).returning();
 
         if (newPlant.length > 0) {
