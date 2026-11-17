@@ -34,6 +34,12 @@ export const plants = pgTable("plants", {
   name: text("name"),
   scientificName: text("scientific_name"),
   icon: text("icon"),
+  wateringEnabled: boolean("watering_enabled"),
+  wateringInterval: integer("watering_interval"),
+  pruningEnabled: boolean("pruning_enabled"),
+  pruningInterval: integer("pruning_interval"),
+  fertilizerEnabled: boolean("fertilizer_enabled"),
+  fertilizerInterval: integer("fertilizer_interval"),
 });
 
 

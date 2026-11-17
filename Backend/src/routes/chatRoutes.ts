@@ -81,24 +81,28 @@ router.post("/", async (req: Request, res: Response) => {
       ],
     };
 
-    const registerPlantTool = {
+   const registerPlantTool = {
       functionDeclarations: [
         {
           name: "registerPlant",
-          description: "Registra una nueva planta en la base de datos para el usuario actual.",
+          description: "Registra una nueva planta en la base de datos para el usuario actual especificando nombre, icono y frecuencias de cuidado.",
           parameters: {
             type: Type.OBJECT,
             properties: {
               name: { type: Type.STRING, description: "Nombre o apodo principal de la planta." },
               scientificName: { type: Type.STRING, description: "Nombre científico de la planta (opcional)." },
               icon: { type: Type.STRING, description: "Identificador numérico o clave del icono de la planta." },
-              wateringInterval: { type: Type.NUMBER, description: "Cada cuántos días se debe regar (ej: 3)." }
+              wateringInterval: { type: Type.NUMBER, description: "Cada cuántos días se debe regar (ej: 3 para cada 3 días)." },
+              // NUEVO: Agregar intervalos para poda o abono si el usuario los menciona
+              pruningInterval: { type: Type.NUMBER, description: "Cada cuántos días se debe podar (opcional)." },
+              fertilizerInterval: { type: Type.NUMBER, description: "Cada cuántos días se debe abonar (opcional)." }
             },
             required: ["name"],
           },
         },
       ],
     };
+    
     const systemInstruction = `
       Eres Rut, la asistente virtual botánica de la aplicación "Raíces".
       Tu objetivo es orientar al usuario sobre el cuidado de sus plantas y gestionar sus tareas de riego/cuidado.
