@@ -302,6 +302,7 @@ router.post("/", async (req: Request, res: Response) => {
         await db.insert(products).values({
           id: crypto.randomUUID(),
           name: name,
+          sku: `SKU-${Date.now().toString().slice(-6)}`,
           categoryId: targetCategoryId, 
           price: price ? String(price) : "0",
           stock: quantity,

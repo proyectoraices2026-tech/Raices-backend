@@ -13,6 +13,7 @@ export const profiles = pgTable("profiles", {
 export const products = pgTable("products", {
     id: uuid("id").primaryKey(),
     categoryId: uuid("category_id"),
+    sku: text("sku"),
     name: text("name"),
     price: numeric("price", { precision: 10, scale: 2 }),
     stock: integer("stock"),
