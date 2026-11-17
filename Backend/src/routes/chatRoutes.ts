@@ -2,8 +2,9 @@ import { Router, Request, Response } from "express";
 import { GoogleGenAI, Type } from "@google/genai";
 import { env } from "../env.js";
 import { db } from "../db/connection.js";
-import { profiles, plants, plantTasks } from "../db/schema/references.js"; 
+import { profiles, plants, plantTasks , roles , products } from "../db/schema/references.js"; 
 import { eq, and } from "drizzle-orm";
+
 
 const router = Router();
 const ai = new GoogleGenAI({ apiKey: String(env.GEMINI_API_KEY) });
@@ -81,6 +82,24 @@ router.post("/", async (req: Request, res: Response) => {
       ],
     };
 
+    const addProductInventoryTool = {
+  functionDeclarations: [
+    {
+      name: "addProductInventory",
+      description: "Agrega un nuevo producto al inventario. Solo permitido para administradores.",
+      parameters: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING, description: "Nombre del producto." },
+          quantity: { type: Type.NUMBER, description: "Cantidad inicial en stock." },
+          price: { type: Type.NUMBER, description: "Precio del producto (opcional)." },
+        },
+        required: ["name", "quantity"],
+      },
+    },
+  ],
+};
+
    const registerPlantTool = {
       functionDeclarations: [
         {
@@ -116,6 +135,8 @@ router.post("/", async (req: Request, res: Response) => {
 
       - Si el usuario indica que ya realizó una tarea de cuidado sobre alguna de sus plantas (por ejemplo: "Ya regué mi Monstera", "Marqué el riego de la orquídea"), invoca inmediatamente la función "markTaskCompleted".
       - Si el usuario indica que quiere agregar, crear o registrar una nueva planta, invoca inmediatamente la función "registerPlant".
+      - Si el usuario indica que quiere agregar un producto al inventario, invoca inmediatamente la función "addProductInventory".
+    
     `;
 
     // 4. Primera interacción con Gemini
@@ -124,7 +145,7 @@ router.post("/", async (req: Request, res: Response) => {
       contents: message,
       config: {
         systemInstruction,
-        tools: [markTaskTool , registerPlantTool],
+        tools: [markTaskTool , registerPlantTool, addProductInventoryTool],
         temperature: 0.3,
       },
     });
@@ -217,6 +238,54 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
       }
+  if (call.name === "addProductInventory") {
+       
+        try {
+          const [adminCheck] = await db
+            .select({ roleName: roles.name })
+            .from(profiles)
+            .innerJoin(roles, eq(profiles.roleId, roles.id))
+            .where(eq(profiles.id, userId));
+
+          if (!adminCheck || adminCheck.roleName !== "admin") {
+            return res.json({
+              reply: `Lo siento ${userName}, esta es una función exclusiva para administradores y no tienes permisos para modificar el inventario. 🔒`,
+            });
+          }
+        } catch (err) {
+          console.error("Error verificando rol de admin para inventario:", err);
+          return res.json({
+            reply: `Ocurrió un error al verificar tus permisos de administrador.`,
+          });
+        }
+
+        
+        const { name, quantity, price } = call.args as {
+          name: string;
+          quantity: number;
+          price?: number;
+        };
+
+        
+       
+       await db.insert(products).values({
+          id: crypto.randomUUID(),
+          name: name,
+          price: price ? String(price) : "0", 
+          stock: quantity,
+          reservedStock: 0,
+          isActive: true,
+        });
+
+
+        return res.json({
+          reply: `¡Listo, ${userName}! Has agregado exitosamente **${quantity}x ${name}** al inventario como administrador. 📦✨`,
+          actionExecuted: {
+            type: "PRODUCT_ADDED",
+          },
+        });
+      }
+      
     }
 
     // Respuesta normal si no requirió ejecución de herramientas
