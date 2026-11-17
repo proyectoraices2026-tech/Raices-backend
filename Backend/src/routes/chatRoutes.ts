@@ -238,7 +238,7 @@ router.post("/", async (req: Request, res: Response) => {
         }
       }
       if (call.name === "addProductInventory") {
-        // 1. Verificamos si el usuario es administrador
+    
         try {
           const [adminCheck] = await db
             .select({ roleName: roles.name })
@@ -258,7 +258,7 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
 
-        // 2. Extraemos los argumentos de Gemini
+    
         const { name, sku, description, quantity, price } = call.args as {
           name: string;
           sku?: string;
@@ -267,30 +267,38 @@ router.post("/", async (req: Request, res: Response) => {
           price?: number;
         };
 
-        // 3. Buscamos inteligentemente una categoría (priorizando si el usuario la mencionó en el mensaje)
+      
         let targetCategoryId = null;
         try {
           const allCategories = await db.select().from(categories);
           
-          // Verificamos si el mensaje del usuario menciona alguna categoría existente
-          const mentionedCategory = allCategories.find(c => 
-            c.name && message.toLowerCase().includes(c.name.toLowerCase())
-          );
+          if (allCategories && allCategories.length > 0) {
+            // Buscamos si el usuario mencionó alguna categoría
+            const mentionedCategory = allCategories.find(c => 
+              c.name && message.toLowerCase().includes(c.name.toLowerCase())
+            );
 
-          // Si la mencionó usamos esa; si no, buscamos por el nombre del producto, o "Planta", o la primera por defecto
-          const matchedCategory = mentionedCategory || 
-                                  allCategories.find(c => c.name && name.toLowerCase().includes(c.name.toLowerCase())) || 
-                                  allCategories.find(c => c.name === "Planta") || 
-                                  allCategories[0];
+            const matchedCategory = mentionedCategory || 
+                                    allCategories.find(c => c.name && name.toLowerCase().includes(c.name.toLowerCase())) || 
+                                    allCategories.find(c => c.name?.toLowerCase() === "planta") || 
+                                    allCategories[0]; // Coge la primera que exista obligatoriamente
 
-          if (matchedCategory) {
-            targetCategoryId = matchedCategory.id;
+            if (matchedCategory) {
+              targetCategoryId = matchedCategory.id;
+            }
           }
         } catch (e) {
           console.error("Error obteniendo categoría:", e);
         }
 
-        // 4. Insertamos el producto en la base de datos cubriendo todos los campos requeridos
+
+        if (!targetCategoryId) {
+          return res.json({
+            reply: `Lo siento ${userName}, no encontré categorías válidas configuradas en la base de datos para registrar el producto.`,
+          });
+        }
+
+        
         await db.insert(products).values({
           id: crypto.randomUUID(),
           name: name,
