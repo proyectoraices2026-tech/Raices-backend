@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { GoogleGenAI, Type } from "@google/genai";
 import { env } from "../env.js";
 import { db } from "../db/connection.js";
-import { profiles, plants, plantTasks , roles , products } from "../db/schema/references.js"; 
+import { profiles, plants, plantTasks , roles , products, categories} from "../db/schema/references.js"; 
 import { eq, and } from "drizzle-orm";
 
 
@@ -238,8 +238,8 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
       }
-  if (call.name === "addProductInventory") {
-       
+ if (call.name === "addProductInventory") {
+        // 1. Verificamos si el usuario es administrador
         try {
           const [adminCheck] = await db
             .select({ roleName: roles.name })
@@ -259,24 +259,41 @@ router.post("/", async (req: Request, res: Response) => {
           });
         }
 
-        
-        const { name, quantity, price } = call.args as {
+        // 2. Extraemos los argumentos de Gemini
+        const { name, sku, description, quantity, price } = call.args as {
           name: string;
+          sku?: string;
+          description?: string;
           quantity: number;
           price?: number;
         };
 
-        
-       
-       await db.insert(products).values({
+        // 3. Buscamos inteligentemente una categoría (ej. si el nombre contiene "planta" o "rosa", asignamos "Planta", o cogemos la primera por defecto)
+        let targetCategoryId = null;
+        try {
+          const allCategories = await db.select().from(categories);
+          
+          // Buscamos si alguna categoría hace match con el nombre del producto, o usamos "Planta" por defecto
+          const matchedCategory = allCategories.find(c => 
+            c.name && name.toLowerCase().includes(c.name.toLowerCase())
+          ) || allCategories.find(c => c.name === "Planta") || allCategories[0];
+
+          if (matchedCategory) {
+            targetCategoryId = matchedCategory.id;
+          }
+        } catch (e) {
+          console.error("Error obteniendo categoría:", e);
+        }
+
+        // 4. Insertamos el producto en la base de datos cubriendo todos los campos requeridos
+        await db.insert(products).values({
           id: crypto.randomUUID(),
-          name: name,
-          price: price ? String(price) : "0", 
+          name: name, 
+          price: price ? String(price) : "0",
           stock: quantity,
           reservedStock: 0,
           isActive: true,
         });
-
 
         return res.json({
           reply: `¡Listo, ${userName}! Has agregado exitosamente **${quantity}x ${name}** al inventario como administrador. 📦✨`,
@@ -285,7 +302,6 @@ router.post("/", async (req: Request, res: Response) => {
           },
         });
       }
-      
     }
 
     // Respuesta normal si no requirió ejecución de herramientas
